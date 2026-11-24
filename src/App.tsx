@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Lenis from 'lenis';
 import {
   Activity,
+  CircleHelp,
   Database,
   Flame,
+  Heart,
+  Mail,
   Pause,
   Play,
   Radio,
@@ -48,6 +51,7 @@ export default function App() {
   const [detailStock, setDetailStock] = useState<typeof engine.latestTicks[number] | null>(null);
   const [stockHistory, setStockHistory] = useState<Record<string, number[]>>({});
   const [workspaceLayer, setWorkspaceLayer] = useState<WorkspaceLayer>('home');
+  const [showPipelineInfo, setShowPipelineInfo] = useState(false);
   const [chartRange, setChartRange] = useState<'1H' | '1D' | '1W' | '1M'>('1D');
   const [marketCapHistory, setMarketCapHistory] = useState<number[]>([]);
   const [marketCapUpdatedAt, setMarketCapUpdatedAt] = useState(new Date());
@@ -635,9 +639,32 @@ export default function App() {
 
               <Card className="overflow-hidden p-5 sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-semibold">Real-Time Kafka Ingestion & Mining Pipeline</h3>
+                  <div className="relative">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-semibold">Real-Time Kafka Ingestion & Mining Pipeline</h3>
+                      <button
+                        type="button"
+                        aria-label="Explain the real-time Kafka ingestion and mining pipeline"
+                        aria-expanded={showPipelineInfo}
+                        onClick={() => setShowPipelineInfo((current) => !current)}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#DDD8C8] text-[#68705D] transition hover:border-[#6366F1] hover:text-[#6366F1]"
+                      >
+                        <CircleHelp className="h-4 w-4" />
+                      </button>
+                    </div>
                     <p className="mt-1 text-xs text-[#68705D]">Continuous event partitioning and association-rule discovery</p>
+                    {showPipelineInfo && (
+                      <div className="absolute left-0 top-10 z-30 w-[min(22rem,calc(100vw-3rem))] rounded-xl border border-[#DDD8C8] bg-[#FFFDF7] p-4 text-xs leading-5 text-[#68705D] shadow-xl">
+                        <div className="font-semibold text-[#2F3428]">How the pipeline works</div>
+                        <ol className="mt-3 space-y-2">
+                          <li><span className="font-semibold text-[#6366F1]">1. Producer:</span> Live stock or crypto ticks arrive from the simulator or Finnhub WebSocket.</li>
+                          <li><span className="font-semibold text-[#6366F1]">2. Kafka broker:</span> Each tick is added to a Kafka-style topic and assigned to one of three partitions.</li>
+                          <li><span className="font-semibold text-[#6366F1]">3. Discretizer:</span> Rolling time windows convert prices and volume into simple signals such as UP or DOWN.</li>
+                          <li><span className="font-semibold text-[#6366F1]">4. Rule engine:</span> FP-Growth or Apriori searches the signal baskets and finds patterns using support, confidence and lift.</li>
+                          <li><span className="font-semibold text-[#6366F1]">5. Live alerts:</span> Strong patterns are shown as co-movement rules and updated as new market data arrives.</li>
+                        </ol>
+                      </div>
+                    )}
                   </div>
                   <span className="rounded-md border border-[#DDD8C8] bg-[#F7F3E8] px-3 py-1.5 text-[10px] font-semibold tabular-nums text-[#68705D]">
                     NOMINAL · {engine.speed}x SPEED
@@ -755,6 +782,26 @@ export default function App() {
                       <div className="mt-2 text-[11px] leading-5 text-[#9CA3AF]">{description}</div>
                     </div>
                   ))}
+                </div>
+              </Card>
+
+              <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="font-semibold">Contact Us</h3>
+                  <p className="mt-1 text-xs text-[#9CA3AF]">Questions or feedback about StreamMine? We'd love to hear from you.</p>
+                  <p className="mt-3 inline-flex items-center gap-2 text-xs text-[#9CA3AF]">
+                    <Heart className="h-4 w-4 text-[#F472B6]" />
+                    Thank you for your interest and support!
+                  </p>
+                </div>
+                <div className="flex flex-col items-start gap-2">
+                  <a
+                    href="mailto:rathortarunkumar76@gmail.com"
+                    className="inline-flex w-fit items-center gap-2 rounded-lg border border-[#1F2937] px-4 py-2 text-sm font-semibold text-[#F9FAFB] transition hover:border-[#6366F1] hover:text-[#818CF8]"
+                  >
+                    <Mail className="h-4 w-4" />
+                    rathortarunkumar76@gmail.com
+                  </a>
                 </div>
               </Card>
             </div>

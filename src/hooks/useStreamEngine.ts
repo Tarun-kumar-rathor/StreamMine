@@ -26,6 +26,10 @@ export function useStreamEngine() {
   const [prices, setPrices] = useState<Record<string, number>>(initialSeed.prices);
   const [latestTicks, setLatestTicks] = useState<StockTick[]>(initialSeed.latestTicks);
   const [rawTickHistory, setRawTickHistory] = useState<StockTick[][]>(initialSeed.allTickBatches);
+  const [openWindowTicks, setOpenWindowTicks] = useState<StockTick[]>([]);
+  const openWindowTicksRef = useRef<StockTick[]>([]);
+  const discretizerConfigRef = useRef(discretizerConfig);
+  discretizerConfigRef.current = discretizerConfig;
   const seedKafkaLogs = useMemo(() => initialSeed.allTickBatches.flatMap((batch, batchIndex) =>
     batch.flatMap((tick, tickIndex) => discretizeTick(tick, discretizerConfig).map((tag) =>
       createKafkaMessage(tick, 'stock-ticks-raw', batchIndex * 100 + tickIndex, tag)
@@ -41,8 +45,7 @@ export function useStreamEngine() {
   const [finnhubStatus, setFinnhubStatus] = useState<FinnhubStatus>({ state: 'closed', message: 'Disconnected' });
   const finnhubRef = useRef<FinnhubStreamClient | null>(null);
   const eventOffset = useRef(0);
-  const windowId = useRef(0);
-  const openWindowTicks = useMemo(() => rawTickHistory.flatMap((batch) => batch).slice(-200), [rawTickHistory]);
+  const windowId = useRef(initialSeed.allTickBatches.length);
 
   useEffect(() => {
     if (mode === 'simulator' || !apiKey) {
@@ -115,6 +118,12 @@ export function useStreamEngine() {
 
   useEffect(() => {
     if (!latestTicks.length) return;
+    openWindowTicksRef.current = [...openWindowTicksRef.current, ...latestTicks];
+    setOpenWindowTicks(openWindowTicksRef.current);
+  }, [latestTicks]);
+
+  useEffect(() => {
+    if (!latestTicks.length) return;
     const newLogs: KafkaMessage[] = [];
     latestTicks.forEach((tick) => {
       discretizeTick(tick, discretizerConfig).forEach((tag) => {
@@ -126,12 +135,16 @@ export function useStreamEngine() {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
+      const ticks = openWindowTicksRef.current;
+      if (!ticks.length) return;
+      openWindowTicksRef.current = [];
+      setOpenWindowTicks([]);
       windowId.current++;
-      const basket = buildBasketFromTicks(windowId.current, openWindowTicks, discretizerConfig);
+      const basket = buildBasketFromTicks(windowId.current, ticks, discretizerConfigRef.current);
       setBaskets((current) => [...current, basket].slice(-MAX_BASKETS));
     }, discretizerConfig.windowSeconds * 1000);
     return () => window.clearInterval(interval);
-  }, [discretizerConfig.windowSeconds, openWindowTicks]);
+  }, [discretizerConfig.windowSeconds]);
 
   useEffect(() => {
     setMiningResult(mineAssociationRules(baskets, miningConfig));
