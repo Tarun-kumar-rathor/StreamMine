@@ -30,8 +30,8 @@ export const FaqAndContact: React.FC = () => {
   const [open, setOpen] = useState<number | null>(0);
   const faqs = [
     ['Does this connect to Apache Kafka?', 'The dashboard uses a browser-side Kafka broker mock that reproduces topics, partitions and offsets.'],
-    ['Does it require a Finnhub key?', 'No. Simulator mode runs without credentials.'],
-    ['Is this financial advice?', 'No. StreamMine is for educational and analytical demonstration only.'],
+    ['Does it require a Finnhub key?', 'Yes. Configure the key on the server to access live market data.'],
+    ['Is this financial advice?', 'No. StreamMine is for educational and analytical use only.'],
   ];
   return <section id="faq" className="max-w-7xl mx-auto px-4 sm:px-6 py-16"><h2 className="text-2xl font-bold mb-5">FAQ</h2><div className="space-y-2">{faqs.map(([question, answer], index) => <Card key={question} className="overflow-hidden"><button onClick={() => setOpen(open === index ? null : index)} className="w-full flex justify-between items-center p-4 text-left text-sm font-semibold"><span>{question}</span><ChevronDown className={`w-4 h-4 transition ${open === index ? 'rotate-180' : ''}`} /></button>{open === index && <p className="px-4 pb-4 text-sm text-[#9CA3AF]">{answer}</p>}</Card>)}</div></section>;
 };

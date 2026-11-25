@@ -1,5 +1,4 @@
-export type MarketMode = 'simulator' | 'finnhub_crypto' | 'finnhub_us';
-export type ShockType = 'NONE' | 'TECH_RALLY' | 'OIL_SPIKE' | 'BANKING_SELLOFF';
+export type MarketMode = 'finnhub_crypto' | 'finnhub_us';
 export type AlgorithmType = 'FP-Growth' | 'Apriori';
 export type KafkaTopic = 'stock-ticks-raw' | 'discretized-events' | 'mined-rules';
 export type StabilityLevel = 'Stable' | 'Emerging' | 'Volatile';
@@ -11,6 +10,7 @@ export interface StockAsset {
   sector: 'US_TECH' | 'IN_IT' | 'ENERGY' | 'BANKING' | 'CRYPTO';
   basePrice: number;
   baseVolume: number;
+  sharesOutstanding?: number; // In billions of shares/units for realistic Market Cap
 }
 export interface StockTick {
   symbol: string;
@@ -20,7 +20,8 @@ export interface StockTick {
   pctChange: number;
   volumeRatio: number;
   timestamp: number;
-  source: 'SIM' | 'FINNHUB_WS';
+  source: 'FINNHUB_WS';
+  volume?: number;
   previousClose?: number;
 }
 export interface KafkaMessage {
@@ -34,7 +35,7 @@ export interface KafkaMessage {
   pct_change: number;
   volume_ratio: number;
   discretized_tag: string;
-  source: 'SIM' | 'FINNHUB_WS';
+  source: 'FINNHUB_WS';
 }
 export interface TransactionBasket {
   windowId: number;

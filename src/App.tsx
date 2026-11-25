@@ -4,29 +4,33 @@ import {
   Activity,
   CircleHelp,
   Database,
-  Flame,
   Heart,
   Mail,
-  Pause,
-  Play,
   Radio,
   SlidersHorizontal,
   Sparkles,
 } from 'lucide-react';
-import { SHOCK_LABELS } from './data/stockUniverse';
 import { useStreamEngine } from './hooks/useStreamEngine';
-import { ShockType } from './types/marketMining';
 import { Navbar } from './components/layout/Navbar';
 import { KpiMetricCards } from './components/pipeline/KpiMetricCards';
-import { KafkaPipelineFlow } from './components/pipeline/KafkaPipelineFlow';
 import { PartitionChart } from './components/kafka/PartitionChart';
 import { LiveMessageFeed } from './components/kafka/LiveMessageFeed';
 import { FinnhubModal } from './components/kafka/FinnhubModal';
+import { PriceChart } from './components/charts/PriceChart';
 import { DiscretizerLab } from './components/mining/DiscretizerLab';
 import { RuleExplorer } from './components/mining/RuleExplorer';
 import { Card } from './components/ui/Primitives';
+import { FinnhubChartRange } from './engine/finnhubService';
+import { PriceForecastPanel } from './components/prediction/PriceForecastPanel';
+import { PaperTrader } from './components/trading/PaperTrader';
+import { ShockReplayAlerts } from './components/mining/ShockReplayAlerts';
+import { LeadLagBenchmark } from './components/mining/LeadLagBenchmark';
+import { NewsSentimentInjector } from './components/mining/NewsSentimentInjector';
+import { TotalMarketCapChart } from './components/market/TotalMarketCapChart';
+import { StockDecisionDrawer } from './components/prediction/StockDecisionDrawer';
+import { BrainCircuit, DollarSign, Film } from 'lucide-react';
 
-type TerminalTab = 'home' | 'overview' | 'kafka' | 'discretizer' | 'rules' | 'operations';
+type TerminalTab = 'home' | 'overview' | 'kafka' | 'discretizer' | 'rules' | 'ai-forecast' | 'paper-trading' | 'shock-replay';
 type WorkspaceLayer = 'home' | 'terminal' | 'stock';
 type CurrencyCode = 'USD' | 'INR' | 'EUR' | 'GBP';
 
@@ -43,35 +47,24 @@ export default function App() {
   const [kafkaSubTab, setKafkaSubTab] = useState<'feed' | 'partitions' | 'topics'>('feed');
   const [discretizerSubTab, setDiscretizerSubTab] = useState<'parameters' | 'baskets' | 'ticks'>('parameters');
   const [rulesSubTab, setRulesSubTab] = useState<'graph' | 'rules' | 'engine'>('graph');
-  const [operationsSubTab, setOperationsSubTab] = useState<'shocks' | 'speed' | 'session'>('shocks');
   const [finnhubOpen, setFinnhubOpen] = useState(false);
   const [marketStarted, setMarketStarted] = useState(false);
   const [stockSearch, setStockSearch] = useState('');
   const [selectedStock, setSelectedStock] = useState('');
   const [detailStock, setDetailStock] = useState<typeof engine.latestTicks[number] | null>(null);
-  const [stockHistory, setStockHistory] = useState<Record<string, number[]>>({});
   const [workspaceLayer, setWorkspaceLayer] = useState<WorkspaceLayer>('home');
   const [showPipelineInfo, setShowPipelineInfo] = useState(false);
-  const [chartRange, setChartRange] = useState<'1H' | '1D' | '1W' | '1M'>('1D');
-  const [marketCapHistory, setMarketCapHistory] = useState<number[]>([]);
-  const [marketCapUpdatedAt, setMarketCapUpdatedAt] = useState(new Date());
-  const [marketCapRange, setMarketCapRange] = useState<'1H' | '1D' | '1W' | '1M'>('1M');
+  const [chartRange, setChartRange] = useState<FinnhubChartRange>('1D');
   const [currency, setCurrency] = useState<CurrencyCode>(() =>
     (localStorage.getItem('streammine_currency') as CurrencyCode) || 'USD'
   );
+  const [decisionDrawerStock, setDecisionDrawerStock] = useState<string | null>(null);
 
   const convertPrice = (price: number) => price * CURRENCIES[currency].rate;
   const formatPrice = (price: number) => {
     const converted = convertPrice(price);
     return `${CURRENCIES[currency].symbol}${converted.toFixed(converted < 10 ? 4 : 2)}`;
   };
-  const formatMarketCap = (value: number) => {
-    const converted = value * CURRENCIES[currency].rate;
-    if (converted >= 1_000_000_000_000) return `${CURRENCIES[currency].symbol}${(converted / 1_000_000_000_000).toFixed(2)}T`;
-    if (converted >= 1_000_000_000) return `${CURRENCIES[currency].symbol}${(converted / 1_000_000_000).toFixed(2)}B`;
-    return `${CURRENCIES[currency].symbol}${(converted / 1_000_000).toFixed(2)}M`;
-  };
-
   useEffect(() => {
     const lenis = new Lenis({ lerp: 0.08, duration: 1.2, smoothWheel: true });
     let rafId = 0;
@@ -93,37 +86,7 @@ export default function App() {
       const liveSelected = engine.latestTicks.find((tick) => tick.displaySymbol === detailStock.displaySymbol);
       if (liveSelected) setDetailStock(liveSelected);
     }
-    setStockHistory((history) => {
-      const next = { ...history };
-      engine.latestTicks.forEach((tick) => {
-        const values = next[tick.displaySymbol] ?? [];
-        next[tick.displaySymbol] = [...values, tick.price].slice(-40);
-      });
-      return next;
-    });
   }, [engine.latestTicks, selectedStock]);
-
-  useEffect(() => {
-    if (!engine.latestTicks.length) return;
-    const updateMarketCap = () => {
-      const sectorWeights: Record<string, number> = {
-        US_TECH: 1_600_000_000,
-        IN_IT: 280_000_000,
-        ENERGY: 1_100_000_000,
-        BANKING: 780_000_000,
-        CRYPTO: 20_000_000,
-      };
-      const trackedMarketCap = engine.latestTicks.reduce(
-        (total, tick) => total + tick.price * (sectorWeights[tick.sector] ?? 500_000_000) * tick.volumeRatio,
-        0
-      );
-      setMarketCapHistory((history) => [...history, trackedMarketCap].slice(-90));
-      setMarketCapUpdatedAt(new Date());
-    };
-    updateMarketCap();
-    const interval = window.setInterval(updateMarketCap, 1000);
-    return () => window.clearInterval(interval);
-  }, [engine.latestTicks]);
 
   const strongRulesCount = engine.miningResult.rules.filter((rule) => rule.lift > 1.2).length;
   const displayTicks = useMemo(
@@ -146,37 +109,10 @@ export default function App() {
   const selectedTick = workspaceLayer === 'stock'
     ? (detailStock ?? displayTicks.find((tick) => tick.displaySymbol === selectedStock) ?? displayTicks[0])
     : (displayTicks.find((tick) => tick.displaySymbol === selectedStock) ?? displayTicks[0]);
-  const selectedHistory = selectedStock ? stockHistory[selectedStock] ?? [] : [];
-  const convertedHistory = useMemo(
-    () => selectedHistory.map((value) => convertPrice(value)),
-    [selectedHistory, currency]
-  );
   const twentyFourHourChange = useMemo(() => {
-    if (detailStock?.previousClose && detailStock.previousClose > 0) {
-      return ((detailStock.price - detailStock.previousClose) / detailStock.previousClose) * 100;
-    }
-    if (!convertedHistory.length) return 0;
-    const reference = convertedHistory[0];
-    if (!reference || reference <= 0) return 0;
-    return ((convertedHistory[convertedHistory.length - 1] - reference) / reference) * 100;
-  }, [convertedHistory]);
-  const chartPoints = useMemo(() => {
-    if (convertedHistory.length < 2) return '';
-    const width = 760;
-    const height = 260;
-    const padding = 18;
-    const min = Math.min(...convertedHistory);
-    const max = Math.max(...convertedHistory);
-    const range = max - min || 1;
-    return convertedHistory.map((value, index) => {
-      const x = padding + (index / (selectedHistory.length - 1)) * (width - padding * 2);
-      const y = height - padding - ((value - min) / range) * (height - padding * 2);
-      return `${x},${y}`;
-    }).join(' ');
-  }, [convertedHistory, selectedHistory.length]);
-  const latestMarketCap = marketCapHistory[marketCapHistory.length - 1] ?? 0;
-  const previousMarketCap = marketCapHistory.length > 1 ? marketCapHistory[marketCapHistory.length - 2] : latestMarketCap;
-  const marketCapChange = previousMarketCap ? ((latestMarketCap - previousMarketCap) / previousMarketCap) * 100 : 0;
+    if (!selectedTick?.previousClose || selectedTick.previousClose <= 0) return 0;
+    return ((selectedTick.price - selectedTick.previousClose) / selectedTick.previousClose) * 100;
+  }, [selectedTick?.price, selectedTick?.previousClose]);
   const stockRules = useMemo(() => {
     if (!selectedTick) return [];
     return engine.miningResult.rules.filter((rule) =>
@@ -195,13 +131,6 @@ export default function App() {
       stable: stockRules.filter((rule) => rule.stability === 'Stable').length,
     };
   }, [stockRules]);
-  const enterDemo = () => {
-    engine.setMode('simulator');
-    engine.setIsRunning(true);
-    setActiveTab('overview');
-    setMarketStarted(true);
-    setWorkspaceLayer('terminal');
-  };
   const enterFinnhub = (targetMode: 'finnhub_us' | 'finnhub_crypto') => {
     setActiveTab('overview');
     setMarketStarted(true);
@@ -221,10 +150,12 @@ export default function App() {
   };
   const tabs: Array<[TerminalTab, string, React.ReactNode]> = [
     ['overview', 'Live Market', <Activity key="overview" className="w-4 h-4" />],
+    ['ai-forecast', 'AI Forecast (LSTM)', <BrainCircuit key="ai" className="w-4 h-4 text-[#6366F1]" />],
+    ['paper-trading', 'Paper Trading', <DollarSign key="trade" className="w-4 h-4 text-[#10B981]" />],
+    ['shock-replay', 'Shock Replay & Alerts', <Film key="shock" className="w-4 h-4 text-[#F59E0B]" />],
     ['kafka', 'Kafka Stream', <Database key="kafka" className="w-4 h-4" />],
     ['discretizer', 'Discretizer', <SlidersHorizontal key="discretizer" className="w-4 h-4" />],
     ['rules', 'Rule Graph', <Sparkles key="rules" className="w-4 h-4" />],
-    ['operations', 'Shock Lab', <Flame key="operations" className="w-4 h-4" />],
   ];
 
   return (
@@ -253,7 +184,7 @@ export default function App() {
                           </div>
                           <div>
                             <h1 className="text-2xl font-bold">{selectedTick.displaySymbol}</h1>
-                            <p className="mt-1 text-xs text-[#68705D]">{selectedTick.sector} · {selectedTick.source === 'SIM' ? 'Simulated Market' : 'Finnhub Live'}</p>
+                            <p className="mt-1 text-xs text-[#68705D]">{selectedTick.sector} · Finnhub Live</p>
                           </div>
                         </div>
                       </div>
@@ -267,114 +198,14 @@ export default function App() {
                   </Card>
 
                   <div className="grid xl:grid-cols-[1.7fr_0.7fr] gap-4">
-                    <Card className="p-5">
-                      <div className="flex items-center justify-between">
-                        <div><h2 className="text-sm font-semibold">Detailed Price Trend</h2><p className="mt-1 text-xs text-[#68705D]">Live line chart · 5-tick smoothing</p></div>
-                        <span className="text-[10px] font-semibold text-[#10B981]">LIVE</span>
-                      </div>
-                      {selectedHistory.length > 1 ? (
-                        <div>
-                          <div className="mt-4 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              {(['1H', '1D', '1W', '1M'] as const).map((range) => (
-                                <button
-                                  key={range}
-                                  onClick={() => setChartRange(range)}
-                                  className={`rounded-md px-2.5 py-1 text-[10px] font-semibold ${chartRange === range ? 'bg-[#6366F1] text-white' : 'text-[#68705D] hover:bg-[#E8E4D7]'}`}
-                                >
-                                  {range}
-                                </button>
-                              ))}
-                            </div>
-                            <span className="text-[10px] tabular-nums text-[#68705D]">
-                              {chartRange === '1H' ? '60 points' : chartRange === '1D' ? '24 points' : chartRange === '1W' ? '7 points' : '30 points'} · {chartRange}
-                            </span>
-                          </div>
-                          <svg viewBox="0 0 760 300" className="mt-3 h-[300px] w-full" role="img" aria-label={`${selectedTick.displaySymbol} detailed price history`}>
-                            {[30, 78, 126, 174, 222].map((y) => (
-                              <g key={y}>
-                                <line x1="58" y1={y} x2="742" y2={y} stroke="#DDD8C8" strokeWidth="1" />
-                                <line x1="58" y1={y} x2="742" y2={y} stroke="#DDD8C8" strokeWidth="1" strokeDasharray="4 6" />
-                              </g>
-                            ))}
-                            {[58, 190, 322, 454, 586, 742].map((x) => (
-                              <line key={x} x1={x} y1="30" x2={x} y2="222" stroke="#DDD8C8" strokeWidth="1" strokeDasharray="4 6" />
-                            ))}
-                            {(() => {
-                              const pointCount = chartRange === '1H' ? 60 : chartRange === '1D' ? 24 : chartRange === '1W' ? 7 : 30;
-                              const rangeTrend = chartRange === '1H' ? 0.006 : chartRange === '1D' ? 0.018 : chartRange === '1W' ? 0.032 : 0.075;
-                              const current = convertedHistory.length
-                                ? convertedHistory[convertedHistory.length - 1]
-                                : selectedTick.price;
-                              const sampled = Array.from({ length: pointCount }, (_, index) => {
-                                const progress = index / (pointCount - 1);
-                                const seed = selectedTick.displaySymbol.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-                                const wave = Math.sin(index * 0.78 + seed) * current * rangeTrend * 0.16;
-                                const shortWave = Math.cos(index * 0.31 + seed * 0.1) * current * rangeTrend * 0.07;
-                                const trend = current * (1 - rangeTrend * (1 - progress));
-                                return index === pointCount - 1 ? current : trend + wave + shortWave;
-                              });
-                              const rawMin = sampled.length ? Math.min(...sampled) : selectedTick.price;
-                              const rawMax = sampled.length ? Math.max(...sampled) : selectedTick.price;
-                              const padding = Math.max((rawMax - rawMin) * 0.18, selectedTick.price * 0.012);
-                              const chartMin = Math.max(0, rawMin - padding);
-                              const chartMax = rawMax + padding;
-                              const range = chartMax - chartMin || 1;
-                              const points = sampled.map((value, index) => ({
-                                x: 58 + (index / Math.max(1, sampled.length - 1)) * 684,
-                                y: 222 - ((value - chartMin) / range) * 192,
-                              }));
-                              const movingAverage = sampled.map((_, index, values) => {
-                                const start = Math.max(0, index - 4);
-                                const window = values.slice(start, index + 1);
-                                return window.reduce((sum, value) => sum + value, 0) / window.length;
-                              }).map((value, index) => ({
-                                x: points[index]?.x ?? 58,
-                                y: 222 - ((value - chartMin) / range) * 192,
-                              }));
-                              const line = points.map((point) => `${point.x},${point.y}`).join(' ');
-                              const averageLine = movingAverage.map((point) => `${point.x},${point.y}`).join(' ');
-                              const areaPoints = points.length
-                                ? `58,222 ${line} ${points[points.length - 1]?.x ?? 742},222`
-                                : '';
-                              return (
-                                <>
-                                  <defs>
-                                    <linearGradient id="stockArea" x1="0" y1="0" x2="0" y2="1">
-                                      <stop offset="0%" stopColor="#6366F1" stopOpacity="0.28" />
-                                      <stop offset="100%" stopColor="#6366F1" stopOpacity="0.02" />
-                                    </linearGradient>
-                                  </defs>
-                                  {areaPoints && <polygon points={areaPoints} fill="url(#stockArea)" />}
-                                  {line && <polyline points={line} fill="none" stroke="#6366F1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />}
-                                  {averageLine && <polyline points={averageLine} fill="none" stroke="#F59E0B" strokeWidth="1.5" strokeDasharray="7 5" strokeLinecap="round" strokeLinejoin="round" />}
-                                  {points.map((point, index) => index === points.length - 1 ? (
-                                    <g key={index}>
-                                      <line x1={point.x} y1="30" x2={point.x} y2="222" stroke="#6366F1" strokeWidth="1" strokeDasharray="3 5" opacity="0.55" />
-                                      <circle cx={point.x} cy={point.y} r="8" fill="#6366F1" fillOpacity="0.14" />
-                                      <circle cx={point.x} cy={point.y} r="4" fill="#10B981" stroke="#FFFDF7" strokeWidth="2" />
-                                    </g>
-                                  ) : null)}
-                                </>
-                              );
-                            })()}
-                            <text x="58" y="286" fill="#68705D" fontSize="9">
-                              {chartRange === '1H' ? '60 min ago' : chartRange === '1D' ? '24 hours ago' : chartRange === '1W' ? '7 days ago' : '30 days ago'}
-                            </text>
-                            <text x="742" y="286" textAnchor="end" fill="#68705D" fontSize="9">Today · Live</text>
-                            <text x="48" y="34" textAnchor="end" fill="#68705D" fontSize="9">High</text>
-                            <text x="48" y="226" textAnchor="end" fill="#68705D" fontSize="9">Low</text>
-                          </svg>
-                          <div className="flex items-center gap-4 border-t border-[#DDD8C8] pt-3 text-[10px]">
-                            <span className="flex items-center gap-1.5"><span className="h-0.5 w-5 bg-[#6366F1]" />Price</span>
-                            <span className="flex items-center gap-1.5"><span className="h-0.5 w-5 border-t border-dashed border-[#F59E0B]" />Moving average</span>
-                            <span className="ml-auto text-[#68705D] tabular-nums">Current {formatPrice(selectedTick.price)}</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="mt-5 flex h-[260px] items-center justify-center text-xs text-[#68705D]">Collecting price history...</div>
-                      )}
-                    </Card>
+                    <PriceChart
+                      symbol={selectedTick.symbol}
+                      displaySymbol={selectedTick.displaySymbol}
+                      latestTick={selectedTick}
+                      range={chartRange}
+                      onRangeChange={setChartRange}
+                      formatPrice={formatPrice}
+                    />
 
                     <Card className="p-5">
                       <h2 className="text-sm font-semibold">Stock Details</h2>
@@ -382,8 +213,7 @@ export default function App() {
                         <div className="flex justify-between py-3 text-xs"><span className="text-[#68705D]">Symbol</span><span className="font-semibold">{selectedTick.displaySymbol}</span></div>
                         <div className="flex justify-between py-3 text-xs"><span className="text-[#68705D]">Sector</span><span className="font-semibold">{selectedTick.sector}</span></div>
                         <div className="flex justify-between py-3 text-xs"><span className="text-[#68705D]">Volume Ratio</span><span className="font-semibold tabular-nums">{selectedTick.volumeRatio.toFixed(2)}x</span></div>
-                        <div className="flex justify-between py-3 text-xs"><span className="text-[#68705D]">Data Source</span><span className="font-semibold">{selectedTick.source === 'SIM' ? 'Simulator' : 'Finnhub WS'}</span></div>
-                        <div className="flex justify-between py-3 text-xs"><span className="text-[#68705D]">History Points</span><span className="font-semibold tabular-nums">{selectedHistory.length}</span></div>
+                        <div className="flex justify-between py-3 text-xs"><span className="text-[#68705D]">Data Source</span><span className="font-semibold">Finnhub WS</span></div>
                         <div className="flex justify-between py-3 text-xs"><span className="text-[#68705D]">Currency</span><span className="font-semibold">{currency}</span></div>
                       </div>
                     </Card>
@@ -544,7 +374,6 @@ export default function App() {
       ) : (
         <>
           <Navbar
-            mode={engine.mode}
             onOpenFinnhub={() => setFinnhubOpen(true)}
             onHome={enterHome}
             currency={currency}
@@ -562,41 +391,63 @@ export default function App() {
             </div>
             <h1 className="text-xl sm:text-2xl font-bold mt-1">StreamMine Terminal</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => engine.setIsRunning(!engine.isRunning)} className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-[#1F2937] bg-[#111827] text-xs">
-              {engine.isRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-              {engine.isRunning ? 'Pause' : 'Resume'}
-            </button>
-            {[1, 2, 5].map((value) => (
-              <button key={value} onClick={() => engine.setSpeed(value as 1 | 2 | 5)} className={`h-9 px-3 rounded-lg border text-xs ${engine.speed === value ? 'border-[#6366F1] bg-[#6366F1]/20 text-[#A5B4FC]' : 'border-[#1F2937] bg-[#111827] text-[#9CA3AF]'}`}>
-                {value}x
+        </div>
+        <Card className="mb-4 overflow-hidden border-[#1F2937] bg-[#111827]/90 backdrop-blur-xl shadow-lg">
+          <div className="flex items-center justify-between border-b border-[#1F2937] px-4 py-2 bg-[#090D16]/60">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#F9FAFB]">Market Tape</span>
+              <span className="flex items-center gap-1 text-[10px] font-mono text-[#10B981] px-1.5 py-0.5 rounded bg-[#10B981]/10 border border-[#10B981]/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />
+                LIVE
+              </span>
+            </div>
+            <span className="text-[10px] font-mono text-[#9CA3AF]">Continuous Finnhub Feed</span>
+          </div>
+          <div className="market-tape flex whitespace-nowrap py-1">
+            {[...engine.latestTicks, ...engine.latestTicks].map((tick, index) => (
+              <button
+                key={`${tick.symbol}-${index}`}
+                onClick={() => setDecisionDrawerStock(tick.displaySymbol)}
+                className="flex items-center gap-2.5 border-r border-[#1F2937] px-5 py-2 text-xs font-mono hover:bg-[#1F2937]/50 transition-colors cursor-pointer group"
+              >
+                <span className="font-bold text-[#F9FAFB] group-hover:text-[#6366F1] transition-colors">{tick.displaySymbol}</span>
+                <span className="tabular-nums text-[#9CA3AF]">{formatPrice(tick.price)}</span>
+                <span className={`tabular-nums font-semibold px-1 rounded ${tick.pctChange >= 0 ? 'text-[#10B981] bg-[#10B981]/10' : 'text-[#EF4444] bg-[#EF4444]/10'}`}>
+                  {tick.pctChange >= 0 ? '+' : ''}{tick.pctChange.toFixed(2)}%
+                </span>
               </button>
             ))}
           </div>
-        </div>
-        <Card className="mb-4 overflow-hidden">
-          <div className="flex items-center border-b border-[#DDD8C8] px-3 py-2">
-            <span className="text-xs font-semibold">Market Tape</span>
-            <span className="ml-2 text-[10px] text-[#10B981]">LIVE</span>
-          </div>
-          <div className="market-tape flex whitespace-nowrap">
-            {[...engine.latestTicks, ...engine.latestTicks].map((tick, index) => (
-              <div key={`${tick.symbol}-${index}`} className="flex items-center gap-2 border-r border-[#DDD8C8] px-5 py-2.5 text-xs">
-                <span className="font-semibold">{tick.displaySymbol}</span>
-                <span className="tabular-nums text-[#68705D]">{formatPrice(tick.price)}</span>
-                <span className={`tabular-nums ${tick.pctChange >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
-                  {tick.pctChange >= 0 ? '+' : ''}{tick.pctChange.toFixed(2)}%
-                </span>
-              </div>
-            ))}
-          </div>
         </Card>
-        <KpiMetricCards eventsProcessed={engine.kafkaLogs.length} kafkaLagMs={engine.isRunning ? engine.speed * 4 : 0} activeWindows={engine.baskets.length} strongRulesCount={strongRulesCount} runtimeMs={engine.miningResult.runtimeMs} />
-        <Card className="mt-4 p-1.5 sticky top-16 z-30 overflow-x-auto">
+        <KpiMetricCards eventsProcessed={engine.kafkaLogs.length} activeWindows={engine.baskets.length} strongRulesCount={strongRulesCount} runtimeMs={engine.miningResult.runtimeMs} />
+
+        {/* 2nd-Layer Total Market Cap Graph */}
+        <div className="mt-4">
+          <TotalMarketCapChart
+            latestTicks={engine.latestTicks}
+            mode={engine.mode}
+            onSelectStock={(sym) => setDecisionDrawerStock(sym)}
+            currency={currency}
+          />
+        </div>
+
+        <Card className="mt-4 p-1.5 sticky top-16 z-30 overflow-x-auto bg-[#111827] border-[#1F2937]">
           <div className="flex min-w-max gap-1">
             {tabs.map(([value, label, icon]) => (
-              <button key={value} onClick={() => setActiveTab(value)} className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition ${activeTab === value ? 'bg-[#6366F1] text-white shadow-lg shadow-[#6366F1]/10' : 'text-[#9CA3AF] hover:bg-[#1F2937] hover:text-white'}`}>
-                {icon}{label}
+              <button
+                key={value}
+                onClick={() => setActiveTab(value)}
+                className={`relative inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                  activeTab === value
+                    ? 'bg-[#6366F1] text-white shadow-lg shadow-[#6366F1]/20'
+                    : 'text-[#9CA3AF] hover:bg-[#1F2937] hover:text-[#F9FAFB]'
+                }`}
+              >
+                {icon}
+                {label}
+                {activeTab === value && (
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-white/40 rounded-full" />
+                )}
               </button>
             ))}
           </div>
@@ -609,26 +460,28 @@ export default function App() {
                   <div className="p-6 sm:p-8">
                     <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-[#10B981]/30 bg-[#10B981]/10 text-[11px] font-semibold text-[#34D399]">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />
-                      System ready
+                      {engine.finnhubStatus.state === 'connected'
+                        ? 'Finnhub connected'
+                        : engine.finnhubStatus.state === 'error'
+                          ? 'Finnhub connection error'
+                          : 'Connecting to Finnhub'}
                     </div>
                     <h2 className="mt-5 text-3xl sm:text-4xl font-bold tracking-tight">Welcome to StreamMine</h2>
                     <p className="mt-3 max-w-2xl text-sm sm:text-base leading-7 text-[#9CA3AF]">
                       Monitor live market movement, inspect Kafka-style event streams, discretize stock signals,
                       and discover statistically significant co-movement rules in one workspace.
                     </p>
-                    <div className="mt-6 flex flex-wrap gap-3">
-                      <button onClick={enterDemo} className="px-5 py-3 rounded-lg bg-[#6366F1] text-sm font-semibold text-white hover:bg-[#4F46E5]">
-                        Launch Demo
-                      </button>
-                      <button onClick={() => setFinnhubOpen(true)} className="px-5 py-3 rounded-lg border border-[#10B981]/40 bg-[#10B981]/10 text-sm font-semibold text-[#34D399] hover:border-[#10B981]">
-                        Connect to Finnhub
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => enterFinnhub(engine.mode)}
+                      className="mt-6 rounded-lg bg-[#6366F1] px-5 py-3 text-sm font-semibold text-white hover:bg-[#4F46E5]"
+                    >
+                      Get Started
+                    </button>
                   </div>
                   <div className="border-t lg:border-t-0 lg:border-l border-[#1F2937] bg-[#090D16] p-6 sm:p-8">
                     <h3 className="text-sm font-semibold">Session status</h3>
                     <div className="mt-5 grid grid-cols-2 gap-3">
-                      <div className="rounded-lg border border-[#1F2937] p-3"><div className="text-[10px] uppercase text-[#6B7280]">Stream</div><div className="mt-1 text-sm font-semibold text-[#10B981]">{engine.isRunning ? 'Running' : 'Paused'}</div></div>
+                      <div className="rounded-lg border border-[#1F2937] p-3"><div className="text-[10px] uppercase text-[#6B7280]">Stream</div><div className="mt-1 text-sm font-semibold text-[#10B981]">{engine.finnhubStatus.state === 'connected' ? 'Connected' : engine.finnhubStatus.state === 'error' ? 'Error' : 'Connecting'}</div></div>
                       <div className="rounded-lg border border-[#1F2937] p-3"><div className="text-[10px] uppercase text-[#6B7280]">Assets</div><div className="mt-1 text-sm font-semibold tabular-nums">{engine.latestTicks.length}</div></div>
                       <div className="rounded-lg border border-[#1F2937] p-3"><div className="text-[10px] uppercase text-[#6B7280]">Windows</div><div className="mt-1 text-sm font-semibold tabular-nums">{engine.baskets.length}</div></div>
                       <div className="rounded-lg border border-[#1F2937] p-3"><div className="text-[10px] uppercase text-[#6B7280]">Rules</div><div className="mt-1 text-sm font-semibold tabular-nums">{engine.miningResult.rules.length}</div></div>
@@ -657,7 +510,7 @@ export default function App() {
                       <div className="absolute left-0 top-10 z-30 w-[min(22rem,calc(100vw-3rem))] rounded-xl border border-[#DDD8C8] bg-[#FFFDF7] p-4 text-xs leading-5 text-[#68705D] shadow-xl">
                         <div className="font-semibold text-[#2F3428]">How the pipeline works</div>
                         <ol className="mt-3 space-y-2">
-                          <li><span className="font-semibold text-[#6366F1]">1. Producer:</span> Live stock or crypto ticks arrive from the simulator or Finnhub WebSocket.</li>
+                          <li><span className="font-semibold text-[#6366F1]">1. Producer:</span> Live stock or crypto ticks arrive from the Finnhub WebSocket.</li>
                           <li><span className="font-semibold text-[#6366F1]">2. Kafka broker:</span> Each tick is added to a Kafka-style topic and assigned to one of three partitions.</li>
                           <li><span className="font-semibold text-[#6366F1]">3. Discretizer:</span> Rolling time windows convert prices and volume into simple signals such as UP or DOWN.</li>
                           <li><span className="font-semibold text-[#6366F1]">4. Rule engine:</span> FP-Growth or Apriori searches the signal baskets and finds patterns using support, confidence and lift.</li>
@@ -667,7 +520,7 @@ export default function App() {
                     )}
                   </div>
                   <span className="rounded-md border border-[#DDD8C8] bg-[#F7F3E8] px-3 py-1.5 text-[10px] font-semibold tabular-nums text-[#68705D]">
-                    NOMINAL · {engine.speed}x SPEED
+                    LIVE · FINNHUB
                   </span>
                 </div>
 
@@ -710,9 +563,9 @@ export default function App() {
                   <div className="relative z-10 grid grid-cols-1 gap-4 md:grid-cols-[1fr_1.35fr_1fr_1fr_1fr] md:items-center">
                   <button onClick={() => setActiveTab('overview')} className="rounded-xl border border-[#DDD8C8] bg-[#FFFDF7] p-4 text-left shadow-sm transition hover:border-[#6366F1]">
                     <Radio className="mb-3 h-5 w-5 text-[#6366F1]" />
-                    <div className="text-sm font-semibold">{engine.mode === 'simulator' ? 'Producer' : 'Finnhub WS'}</div>
+                    <div className="text-sm font-semibold">Finnhub WS</div>
                     <div className="mt-1 text-[11px] text-[#68705D]">{engine.latestTicks.length} equity feeds</div>
-                    <div className="mt-3 text-[10px] font-mono text-[#68705D]">{engine.isRunning ? '14 msg/s' : 'paused'}</div>
+                    <div className="mt-3 text-[10px] font-mono text-[#68705D]">{engine.finnhubStatus.state}</div>
                   </button>
 
                   <Card className="relative z-10 overflow-visible border-[#9BA685] p-0">
@@ -822,110 +675,22 @@ export default function App() {
                     ))}
                   </div>
                 </Card>
-                <Card className="overflow-hidden p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-semibold">Tracked Market Capitalization</h3>
-                      <p className="mt-1 text-[10px] text-[#68705D]">Live weighted total across {engine.latestTicks.length} tracked stocks</p>
-                    </div>
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#10B981]"><span className="h-1.5 w-1.5 rounded-full bg-[#10B981] animate-pulse" />1-second refresh</span>
+                <PriceChart
+                  symbol={selectedTick?.symbol ?? (displayTicks[0]?.symbol ?? '')}
+                  displaySymbol={selectedTick?.displaySymbol ?? (displayTicks[0]?.displaySymbol ?? 'Market')}
+                  latestTick={selectedTick ?? displayTicks[0]}
+                  range={chartRange}
+                  onRangeChange={setChartRange}
+                  formatPrice={formatPrice}
+                />
+                <Card className="grid grid-cols-2 gap-3 p-4 text-xs">
+                  <div>
+                    <div className="text-[#68705D]">Advancing</div>
+                    <div className="mt-1 font-semibold text-[#10B981]">{engine.latestTicks.filter((tick) => tick.pctChange >= 0).length} assets</div>
                   </div>
-                  <div className="mt-3 flex items-end gap-3">
-                    <div className="text-2xl font-bold tabular-nums">{formatMarketCap(latestMarketCap)}</div>
-                    <div className={`pb-1 text-xs font-semibold tabular-nums ${marketCapChange >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
-                      {marketCapChange >= 0 ? '+' : ''}{marketCapChange.toFixed(4)}%
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      {(['1H', '1D', '1W', '1M'] as const).map((range) => (
-                        <button
-                          key={range}
-                          onClick={() => setMarketCapRange(range)}
-                          className={`rounded-md px-2.5 py-1 text-[10px] font-semibold ${marketCapRange === range ? 'bg-[#6366F1] text-white' : 'text-[#68705D] hover:bg-[#E8E4D7]'}`}
-                        >
-                          {range}
-                        </button>
-                      ))}
-                    </div>
-                    <span className="text-[10px] text-[#68705D]">
-                      {marketCapRange === '1M'
-                        ? `${new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – Today`
-                        : marketCapRange === '1W'
-                          ? 'Past 7 days'
-                          : marketCapRange === '1D'
-                            ? 'Past 24 hours'
-                            : 'Past 60 minutes'}
-                    </span>
-                  </div>
-                  {marketCapHistory.length > 1 ? (
-                    <svg viewBox="0 0 760 260" className="mt-3 h-52 w-full" role="img" aria-label="Live overall market capitalization history">
-                      {[30, 78, 126, 174, 222].map((y) => (
-                        <g key={y}>
-                          <line x1="58" y1={y} x2="742" y2={y} stroke="#DDD8C8" strokeWidth="1" strokeDasharray="4 6" />
-                          <text x="48" y={y + 3} textAnchor="end" fill="#68705D" fontSize="8">T</text>
-                        </g>
-                      ))}
-                      {[58, 190, 322, 454, 586, 742].map((x) => (
-                        <line key={x} x1={x} y1="30" x2={x} y2="222" stroke="#DDD8C8" strokeWidth="1" strokeDasharray="4 6" />
-                      ))}
-                      {(() => {
-                        const count = marketCapRange === '1M' ? 31 : marketCapRange === '1W' ? 7 : marketCapRange === '1D' ? 24 : 60;
-                        const trend = marketCapRange === '1M' ? 0.082 : marketCapRange === '1W' ? 0.034 : marketCapRange === '1D' ? 0.018 : 0.009;
-                        const liveValue = latestMarketCap * CURRENCIES[currency].rate;
-                        const values = Array.from({ length: count }, (_, index) => {
-                          const progress = index / (count - 1);
-                          const wave = Math.sin(index * 0.72) * liveValue * 0.0028;
-                          const rangeValue = liveValue * (1 - trend * (1 - progress)) + wave * (1 - progress);
-                          return index === count - 1 ? liveValue : rangeValue;
-                        });
-                        const observedMin = Math.min(...values);
-                        const observedMax = Math.max(...values);
-                        const min = observedMin * 0.995;
-                        const max = observedMax * 1.005;
-                        const range = max - min || 1;
-                        const points = values.map((value, index) => ({
-                          x: 58 + (index / (values.length - 1)) * 684,
-                          y: 222 - ((value - min) / range) * 192,
-                        }));
-                        const line = points.map((point) => `${point.x},${point.y}`).join(' ');
-                        const area = points.length ? `58,222 ${line} ${points[points.length - 1].x},222` : '';
-                        return (
-                          <>
-                            <defs>
-                              <linearGradient id="marketCapArea" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#6366F1" stopOpacity="0.28" />
-                                <stop offset="100%" stopColor="#6366F1" stopOpacity="0.02" />
-                              </linearGradient>
-                            </defs>
-                            {area && <polygon points={area} fill="url(#marketCapArea)" />}
-                            <polyline points={line} fill="none" stroke="#6366F1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                            {points.map((point, index) => index === points.length - 1 ? (
-                              <g key={index}><circle cx={point.x} cy={point.y} r="8" fill="#6366F1" fillOpacity="0.14" /><circle cx={point.x} cy={point.y} r="4" fill="#10B981" stroke="#FFFDF7" strokeWidth="2" /></g>
-                            ) : null)}
-                            <text x="58" y="248" fill="#68705D" fontSize="8">
-                              {marketCapRange === '1M'
-                                ? new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                                : marketCapRange === '1W'
-                                  ? '7 days ago'
-                                  : marketCapRange === '1D'
-                                    ? '24 hours ago'
-                                    : '60 minutes ago'}
-                            </text>
-                            <text x="742" y="248" textAnchor="end" fill="#68705D" fontSize="8">Today · {marketCapUpdatedAt.toLocaleTimeString()}</text>
-                            <text x="48" y="34" textAnchor="end" fill="#68705D" fontSize="8">{formatMarketCap(max)}</text>
-                            <text x="48" y="226" textAnchor="end" fill="#68705D" fontSize="8">{formatMarketCap(min)}</text>
-                          </>
-                        );
-                      })()}
-                    </svg>
-                  ) : (
-                    <div className="mt-3 flex h-52 items-center justify-center text-xs text-[#68705D]">Collecting market-cap history...</div>
-                  )}
-                  <div className="grid grid-cols-3 gap-2 border-t border-[#DDD8C8] pt-3 text-[10px]">
-                    <div><div className="text-[#68705D]">Advancing</div><div className="mt-1 font-semibold text-[#10B981]">{engine.latestTicks.filter((tick) => tick.pctChange >= 0).length} stocks</div></div>
-                    <div><div className="text-[#68705D]">Declining</div><div className="mt-1 font-semibold text-[#EF4444]">{engine.latestTicks.filter((tick) => tick.pctChange < 0).length} stocks</div></div>
-                    <div><div className="text-[#68705D]">Data points</div><div className="mt-1 font-semibold tabular-nums">{marketCapHistory.length}</div></div>
+                  <div>
+                    <div className="text-[#68705D]">Declining</div>
+                    <div className="mt-1 font-semibold text-[#EF4444]">{engine.latestTicks.filter((tick) => tick.pctChange < 0).length} assets</div>
                   </div>
                 </Card>
                 <PartitionChart logs={engine.kafkaLogs} />
@@ -935,9 +700,14 @@ export default function App() {
           )}
           {activeTab === 'kafka' && (
             <div className="space-y-4">
-              <Card className="p-1.5"><div className="flex flex-wrap gap-1">{([
-                ['feed', 'Live Feed'], ['partitions', 'Partition Load'], ['topics', 'Topics'],
-              ] as const).map(([value, label]) => <button key={value} onClick={() => setKafkaSubTab(value)} className={`px-3 py-2 rounded-md text-xs font-semibold ${kafkaSubTab === value ? 'bg-[#1F2937] text-white' : 'text-[#9CA3AF]'}`}>{label}</button>)}</div></Card>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Card className="p-1.5"><div className="flex flex-wrap gap-1">{([
+                  ['feed', 'Live Feed'], ['partitions', 'Partition Load'], ['topics', 'Topics'],
+                ] as const).map(([value, label]) => <button key={value} onClick={() => setKafkaSubTab(value)} className={`px-3 py-2 rounded-md text-xs font-semibold ${kafkaSubTab === value ? 'bg-[#1F2937] text-white' : 'text-[#9CA3AF]'}`}>{label}</button>)}</div></Card>
+                <button onClick={engine.clearLogs} className="px-3 py-2 rounded-lg border border-[#1F2937] text-xs text-[#9CA3AF]">
+                  Clear Kafka buffer
+                </button>
+              </div>
               {kafkaSubTab === 'feed' && <LiveMessageFeed logs={displayKafkaLogs} />}
               {kafkaSubTab === 'partitions' && <div className="grid md:grid-cols-2 gap-4"><PartitionChart logs={engine.kafkaLogs} /><Card className="p-5"><h3 className="text-sm font-semibold">Partition Details</h3><div className="mt-4 space-y-3">{[0, 1, 2].map((partition) => <div key={partition} className="flex justify-between text-xs border-b border-[#1F2937] pb-3"><span className="text-[#9CA3AF]">P{partition}</span><span className="tabular-nums">{engine.kafkaLogs.filter((message) => message.partition === partition).length} messages</span></div>)}</div></Card></div>}
               {kafkaSubTab === 'topics' && <div className="grid md:grid-cols-3 gap-4">{(['stock-ticks-raw', 'discretized-events', 'mined-rules'] as const).map((topic) => <Card key={topic} className="p-5"><Database className="w-5 h-5 text-[#6366F1]" /><h3 className="mt-3 text-sm font-semibold">{topic}</h3><p className="mt-2 text-xs text-[#6B7280]">{engine.kafkaLogs.filter((message) => message.topic === topic).length} buffered events</p></Card>)}</div>}
@@ -953,24 +723,52 @@ export default function App() {
               {discretizerSubTab === 'ticks' && <Card className="p-5"><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">{engine.openWindowTicks.slice(-60).map((tick, index) => <div key={`${tick.symbol}-${tick.timestamp}-${index}`} className="flex justify-between rounded-lg border border-[#1F2937] p-3 text-xs"><span>{tick.displaySymbol}</span><span className={tick.pctChange >= 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}>{tick.pctChange.toFixed(2)}%</span></div>)}</div></Card>}
             </div>
           )}
+          {activeTab === 'ai-forecast' && (
+            <div className="space-y-4">
+              <PriceForecastPanel
+                symbol={selectedTick?.displaySymbol || selectedStock || (engine.latestTicks[0]?.displaySymbol ?? 'AAPL')}
+                currentPrice={selectedTick?.price || (engine.latestTicks.find(t => t.displaySymbol === selectedStock)?.price ?? (engine.latestTicks[0]?.price ?? 180))}
+                activeLift={engine.miningResult.rules[0]?.lift ?? 1.35}
+                recentTicks={engine.latestTicks.map(t => ({ price: t.price, pctChange: t.pctChange, volumeRatio: t.volumeRatio }))}
+              />
+            </div>
+          )}
+          {activeTab === 'paper-trading' && (
+            <div className="space-y-4">
+              <PaperTrader
+                rules={engine.miningResult.rules}
+                latestTicks={engine.latestTicks}
+              />
+            </div>
+          )}
+          {activeTab === 'shock-replay' && (
+            <div className="space-y-4">
+              <ShockReplayAlerts
+                latestTicks={engine.latestTicks}
+                rules={engine.miningResult.rules}
+                onReplayShockTicks={engine.replayShockTicks}
+              />
+            </div>
+          )}
           {activeTab === 'rules' && (
             <div className="space-y-4">
+              <LeadLagBenchmark
+                leadLagEnabled={engine.leadLagEnabled}
+                onToggleLeadLag={engine.setLeadLagEnabled}
+                fpGrowthRuntimeMs={engine.miningResult.fpGrowthRuntimeMs ?? 0.8}
+                aprioriRuntimeMs={engine.miningResult.aprioriRuntimeMs ?? 2.7}
+                frequentItemsetsCount={engine.miningResult.frequentItemsetsCount}
+              />
+              <NewsSentimentInjector
+                onInjectNewsTag={engine.injectNewsTag}
+                injectedNewsHistory={engine.injectedNews}
+              />
               <Card className="p-1.5"><div className="flex flex-wrap gap-1">{([
                 ['graph', 'Rule Graph'], ['rules', 'Rules Table'], ['engine', 'Mining Engine'],
               ] as const).map(([value, label]) => <button key={value} onClick={() => setRulesSubTab(value)} className={`px-3 py-2 rounded-md text-xs font-semibold ${rulesSubTab === value ? 'bg-[#1F2937] text-white' : 'text-[#9CA3AF]'}`}>{label}</button>)}</div></Card>
               {rulesSubTab === 'graph' && <RuleExplorer rules={engine.miningResult.rules} runtimeMs={engine.miningResult.runtimeMs} config={engine.miningConfig} setConfig={engine.setMiningConfig} />}
               {rulesSubTab === 'rules' && <Card className="p-5"><div className="divide-y divide-[#1F2937]">{engine.miningResult.rules.map((rule) => <div key={rule.id} className="grid md:grid-cols-[1fr_90px_100px_80px] gap-3 py-3 text-xs items-center"><div>{rule.antecedent.join(' + ')} <span className="text-[#818CF8]">→</span> {rule.consequent.join(' + ')}</div><span>Support {rule.support.toFixed(3)}</span><span>Confidence {rule.confidence.toFixed(3)}</span><span className="text-[#10B981] font-bold">Lift {rule.lift.toFixed(2)}</span></div>)}</div></Card>}
               {rulesSubTab === 'engine' && <Card className="p-5"><div className="grid md:grid-cols-2 gap-6"><RuleExplorer rules={[]} runtimeMs={engine.miningResult.runtimeMs} config={engine.miningConfig} setConfig={engine.setMiningConfig} /><Card className="p-5"><h3 className="text-sm font-semibold">Engine Metrics</h3><div className="mt-4 space-y-3 text-xs"><div className="flex justify-between"><span className="text-[#9CA3AF]">Frequent itemsets</span><span className="tabular-nums">{engine.miningResult.frequentItemsetsCount}</span></div><div className="flex justify-between"><span className="text-[#9CA3AF]">Discovered rules</span><span className="tabular-nums">{engine.miningResult.rules.length}</span></div><div className="flex justify-between"><span className="text-[#9CA3AF]">Runtime</span><span className="tabular-nums">{engine.miningResult.runtimeMs} ms</span></div></div></Card></div></Card>}
-            </div>
-          )}
-          {activeTab === 'operations' && (
-            <div className="space-y-4">
-              <Card className="p-1.5"><div className="flex flex-wrap gap-1">{([
-                ['shocks', 'Market Shocks'], ['speed', 'Stream Speed'], ['session', 'Session Controls'],
-              ] as const).map(([value, label]) => <button key={value} onClick={() => setOperationsSubTab(value)} className={`px-3 py-2 rounded-md text-xs font-semibold ${operationsSubTab === value ? 'bg-[#1F2937] text-white' : 'text-[#9CA3AF]'}`}>{label}</button>)}</div></Card>
-              {operationsSubTab === 'shocks' && <Card className="p-5"><div className="mb-5"><h2 className="text-lg font-semibold">Market Shock Operations</h2><p className="text-sm text-[#9CA3AF] mt-1">Inject a correlated sector event into the live simulator.</p></div><div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">{(['NONE', 'TECH_RALLY', 'OIL_SPIKE', 'BANKING_SELLOFF'] as ShockType[]).map((value) => <button key={value} onClick={() => engine.triggerShock(value)} className={`min-h-32 p-4 rounded-xl border text-left transition ${engine.shock === value ? 'border-[#F59E0B] bg-[#F59E0B]/10' : 'border-[#1F2937] bg-[#090D16] hover:border-[#6366F1]'}`}><Flame className={`w-5 h-5 ${engine.shock === value ? 'text-[#F59E0B]' : 'text-[#9CA3AF]'}`} /><div className="mt-4 font-semibold">{SHOCK_LABELS[value]}</div><div className="mt-1 text-xs text-[#6B7280]">{value === 'NONE' ? 'Restore normal market movement' : `Apply ${SHOCK_LABELS[value].toLowerCase()} sector behavior`}</div></button>)}</div></Card>}
-              {operationsSubTab === 'speed' && <Card className="p-5"><div className="grid sm:grid-cols-3 gap-3">{[1, 2, 5].map((value) => <button key={value} onClick={() => engine.setSpeed(value as 1 | 2 | 5)} className={`p-5 rounded-xl border ${engine.speed === value ? 'border-[#6366F1] bg-[#6366F1]/10' : 'border-[#1F2937]'}`}><div className="text-2xl font-bold">{value}x</div><div className="mt-1 text-xs text-[#9CA3AF]">{value === 1 ? 'Real-time' : value === 2 ? 'Fast stream' : 'Maximum stream'}</div></button>)}</div></Card>}
-              {operationsSubTab === 'session' && <Card className="p-5"><div className="flex flex-wrap gap-3"><button onClick={() => engine.setIsRunning(!engine.isRunning)} className="px-4 py-3 rounded-lg border border-[#1F2937] text-sm">{engine.isRunning ? 'Pause stream' : 'Resume stream'}</button><button onClick={() => engine.clearLogs()} className="px-4 py-3 rounded-lg border border-[#1F2937] text-sm">Clear Kafka buffer</button><button onClick={() => engine.triggerShock('NONE')} className="px-4 py-3 rounded-lg border border-[#1F2937] text-sm">Reset shock state</button></div></Card>}
             </div>
           )}
         </div>
@@ -980,14 +778,16 @@ export default function App() {
       <FinnhubModal
         open={finnhubOpen}
         onClose={() => setFinnhubOpen(false)}
-        mode={engine.mode}
-        setMode={(targetMode) => {
-          if (targetMode === 'simulator') enterDemo();
-          else enterFinnhub(targetMode);
-        }}
-        apiKey={engine.apiKey}
-        setApiKey={engine.setApiKey}
+        setMode={enterFinnhub}
         status={engine.finnhubStatus}
+      />
+      {/* Slide-Over Decision Drawer */}
+      <StockDecisionDrawer
+        symbol={decisionDrawerStock}
+        onClose={() => setDecisionDrawerStock(null)}
+        latestTicks={engine.latestTicks}
+        rules={engine.miningResult.rules}
+        mode={engine.mode}
       />
     </div>
   );

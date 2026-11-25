@@ -3,37 +3,71 @@
 @tailwind utilities;
 
 :root {
-  --bg-primary: #090D16;
-  --bg-surface: #111827;
-  --border-steel: #1F2937;
-  --accent-indigo: #6366F1;
-  --bullish: #10B981;
-  --bearish: #EF4444;
-  --warning: #F59E0B;
-}
-body {
-  margin: 0;
-  font-family: 'Inter', sans-serif;
-  background: #F7F3E8;
-  color: #2F3428;
-  overflow-x: hidden;
+  --bg-primary: #F7F3E8;
+  --bg-surface: #FFFDF7;
+  --border-steel: #DDD8C8;
+  --accent-indigo: #4F46E5;
+  --bullish: #059669;
+  --bearish: #DC2626;
+  --warning: #D97706;
 }
 
-/* Light StreamMine theme: applied across the existing component utility classes. */
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: #F7F3E8;
+  color: #1F2937;
+  overflow-x: hidden;
+  background-image:
+    radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.04) 0%, transparent 40%);
+  background-attachment: fixed;
+}
+
+/* Light Theme Component Palette Overrides */
 [class*="bg-[#090D16]"] { background-color: #F7F3E8 !important; }
 [class*="bg-[#111827]"] { background-color: #FFFDF7 !important; }
 [class*="bg-[#1F2937]"] { background-color: #E8E4D7 !important; }
 [class*="border-[#1F2937]"] { border-color: #DDD8C8 !important; }
-[class*="text-[#F9FAFB]"] { color: #2F3428 !important; }
-[class*="text-[#9CA3AF]"] { color: #68705D !important; }
-[class*="text-[#6B7280]"] { color: #7A806F !important; }
-[class*="text-white"] { color: #2F3428 !important; }
-[class*="hover:text-white"]:hover { color: #171A14 !important; }
+[class*="text-[#F9FAFB]"] { color: #111827 !important; }
+[class*="text-[#9CA3AF]"] { color: #64748B !important; }
+[class*="text-[#6B7280]"] { color: #64748B !important; }
+[class*="text-white"] { color: #111827 !important; }
+[class*="hover:text-white"]:hover { color: #1E1B4B !important; }
 [class*="divide-[#1F2937]"] > :where(*) { border-color: #DDD8C8 !important; }
-input, select {
-  color: #2F3428;
-  background-color: #FFFDF7;
+
+/* Premium Light Glassmorphic Card Styling */
+.glass-panel {
+  background: rgba(255, 253, 247, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(221, 216, 200, 0.9);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(255, 255, 255, 0.6);
 }
+
+.glass-panel-interactive {
+  transition: all 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-panel-interactive:hover {
+  transform: translateY(-2px);
+  border-color: rgba(99, 102, 241, 0.45);
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.08), 0 0 18px rgba(99, 102, 241, 0.12);
+}
+
+/* Glow highlights */
+.glow-indigo {
+  box-shadow: 0 0 25px -4px rgba(99, 102, 241, 0.15);
+}
+.glow-emerald {
+  box-shadow: 0 0 25px -4px rgba(16, 185, 129, 0.15);
+}
+
+input, select {
+  color: #111827;
+  background-color: #FFFDF7;
+  border-color: #DDD8C8;
+}
+
 html {
   scroll-behavior: smooth;
   scrollbar-color: #374151 #090D16;
@@ -109,5 +143,49 @@ h1, h2, h3 { font-family: 'Plus Jakarta Sans', sans-serif; }
   background: radial-gradient(circle at 15% 72%, rgba(155, 166, 133, 0.42), transparent 22rem);
 }
 @media (prefers-reduced-motion: reduce) {
-  .animate-kafka-flow, .animate-shock { animation: none; }
+  .animate-kafka-flow, .animate-shock, .pipeline-flow-line, .pipeline-flow-dot, .hover-card-lift {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Obsidian Quant Living Animations */
+.hover-card-lift {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms ease;
+}
+.hover-card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.15), 0 8px 10px -6px rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.4) !important;
+}
+
+@keyframes amberShockwave {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
+    border-color: #F59E0B;
+  }
+  50% {
+    box-shadow: 0 0 0 20px rgba(245, 158, 11, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+}
+.shockwave-active {
+  animation: amberShockwave 1.2s cubic-bezier(0, 0, 0.2, 1) 2;
+}
+
+/* Subtle breathing glow for active high lift graph edges */
+@keyframes highLiftGlow {
+  0%, 100% {
+    stroke-opacity: 0.65;
+    filter: drop-shadow(0 0 3px rgba(16, 185, 129, 0.4));
+  }
+  50% {
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 9px rgba(16, 185, 129, 0.85));
+  }
+}
+.high-lift-edge {
+  animation: highLiftGlow 2.2s ease-in-out infinite;
 }
